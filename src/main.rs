@@ -1,88 +1,101 @@
 extern crate paho_mqtt;
 
+use clap::{App, Arg, ArgMatches};
 use std::{process, time};
 use tokio;
 use tokio_stream::StreamExt;
 
 struct Args {
-    pub mqtt_broker_uri: String,
+    pub host: String,
     pub res_topic: String,
     pub req_topic: String,
     pub interval: u8,
-    pub message: Option<String>,
-    pub lifetime: u8,
+    pub timeout: u8,
+    pub payload: String,
+    pub expect: Option<String>,
 }
 
-impl Args {
-    pub fn load_env() -> Self {
-        let mqtt_broker_uri = {
-            let broker_uri = std::env::var("HEALTHCHECK_MQTT_BROKER_URI");
-            let variable_name = std::env::var("HEALTHCHECK_MQTT_BROKER_URI_VARIABLE_NAME");
-            match (&broker_uri, &variable_name) {
-                (Ok(_), _) => broker_uri,
-                (Err(_), Ok(name)) => std::env::var(name),
-                (Err(_), Err(_)) => broker_uri,
-            }
-        };
-        if mqtt_broker_uri.is_err() {
-            panic!("missing: neither HEALTHCHECK_MQTT_BROKER_URI nor HEALTHCHECK_MQTT_BROKER_URI_VARIABLE_NAME");
-        }
-        let service_name = std::env::var("SERVICE_NAME");
-        let res_topic = {
-            let topic = std::env::var("HEALTHCHECK_RES_TOPIC");
-            match (&topic, &service_name) {
-                (Ok(_), _) => topic,
-                (Err(_), Ok(name)) => Ok(format!("{}/healthcheck_res", name)),
-                (Err(_), Err(_)) => topic,
-            }
-        };
-        let req_topic = {
-            let topic = std::env::var("HEALTHCHECK_REQ_TOPIC");
-            match (&topic, &service_name) {
-                (Ok(_), _) => topic,
-                (Err(_), Ok(name)) => Ok(format!("{}/healthcheck_req", name)),
-                (Err(_), Err(_)) => topic,
-            }
-        };
-        if res_topic.is_err() {
-            panic!("missing: neither HEALTHCHECK_RES_TOPIC nor SERVICE_NAME");
-        }
-        if req_topic.is_err() {
-            panic!("missing: neither HEALTHCHECK_REQ_TOPIC nor SERVICE_NAME");
-        }
-        let message = std::env::var("HEALTHCHECK_MESSAGE").ok();
-        let interval = std::env::var("HEALTHCHECK_REQUEST_INTERVAL")
-            .unwrap_or("2".into())
-            .parse();
-        if interval.is_err() {
-            panic!("failed to parse HEALTHCHECK_REQUEST_INTERVAL, specify a value in [0, 255]");
-        }
-        let lifetime = std::env::var("HEALTHCHECK_REQUEST_LIFETIME")
-            .unwrap_or("16".into())
-            .parse();
-        if lifetime.is_err() {
-            panic!("failed to parse HEALTHCHECK_REQUEST_LIFETIME, specify a value in [0, 255]");
-        }
-
+impl From<ArgMatches> for Args {
+    fn from(matches: ArgMatches) -> Self {
+        let host = matches.value_of_t("host").unwrap();
+        let req_topic = matches.value_of_t("request_topic").unwrap();
+        let res_topic = matches.value_of_t("response_topic").unwrap();
+        let interval = matches.value_of_t("interval").unwrap_or(2u8);
+        let timeout = matches.value_of_t("timeout").unwrap_or(16u8);
+        let payload = matches
+            .value_of_t("payload")
+            .unwrap_or("healthcheck".to_string());
+        let expect = matches.value_of_t("expect").ok();
         Self {
-            mqtt_broker_uri: mqtt_broker_uri.unwrap(),
-            res_topic: res_topic.unwrap(),
-            req_topic: req_topic.unwrap(),
-            message,
-            interval: interval.unwrap(),
-            lifetime: lifetime.unwrap(),
+            host,
+            res_topic,
+            req_topic,
+            interval,
+            timeout,
+            payload,
+            expect,
         }
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let args = Args::load_env();
+    let args: Args = App::new("mqtt-healthchecker-rs")
+        .version("0.1.0")
+        .author("Yusuke Sato <yusuke1.sato9.git@gmail.com>")
+        .arg(
+            Arg::new("host")
+                .short('h')
+                .long("host")
+                .value_name("HOST")
+                .about("Sets the MQTT broker host")
+                .required(true),
+        )
+        .arg(
+            Arg::new("request_topic")
+                .long("request")
+                .about("Sets the topic name to which sends requests")
+                .value_name("REQUEST_TOPIC")
+                .required(true),
+        )
+        .arg(
+            Arg::new("response_topic")
+                .long("response")
+                .about("Sets the topic name to which the response is sent")
+                .value_name("RESPONSE_TOPIC")
+                .required(true),
+        )
+        .arg(
+            Arg::new("payload")
+                .short('p')
+                .long("payload")
+                .about("The payload for the healthckeck request (default: \"healthcheck\")"),
+        )
+        .arg(
+            Arg::new("expect")
+                .short('e')
+                .long("expect")
+                .about("The expected payload in the healthckeck response"),
+        )
+        .arg(
+            Arg::new("interval")
+                .short('i')
+                .long("interval")
+                .about("The interval period for sending a request (default: 2 seconds)"),
+        )
+        .arg(
+            Arg::new("timeout")
+                .short('t')
+                .long("timeout")
+                .about("The timeout (seconds) to exit with an error status (default: 16 seconds)"),
+        )
+        .get_matches()
+        .into();
 
-    let lifetime = args.lifetime;
+    let timeout = args.timeout;
     tokio::spawn(async move {
-        tokio::time::sleep(time::Duration::from_secs(lifetime.into())).await;
-        println!("lifetime has been exhausted");
+        tokio::time::sleep(time::Duration::from_secs(timeout.into())).await;
+        println!("has reached the timeout: {}", timeout);
         process::exit(1);
     });
 
@@ -92,7 +105,7 @@ async fn main() {
             .unwrap()
             .as_millis();
         let client_id = format!("mqtt-healthchecker_{:x}", suffix);
-        let uri = args.mqtt_broker_uri.clone();
+        let uri = args.host.clone();
         let create_opts = paho_mqtt::CreateOptionsBuilder::new()
             .server_uri(&uri)
             .client_id(client_id)
@@ -119,7 +132,7 @@ async fn main() {
     tokio::spawn(async move {
         let mut counter = 0u32;
         loop {
-            let msg = paho_mqtt::Message::new(req_topic.as_str(), "healthcheck", 0);
+            let msg = paho_mqtt::Message::new(req_topic.as_str(), "healthcheck", 1);
             match client.publish(msg).await {
                 Ok(_) => {
                     counter += 1;
@@ -147,7 +160,7 @@ async fn main() {
         if args.res_topic != topic {
             continue;
         }
-        match args.message {
+        match args.expect {
             Some(ref msg) if *msg != payload => {
                 println!("Unexpected payload: {:?}", payload);
                 continue;
