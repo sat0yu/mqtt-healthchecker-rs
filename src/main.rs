@@ -41,7 +41,7 @@ impl From<ArgMatches> for Args {
 #[tokio::main]
 async fn main() {
     let args: Args = App::new("mqtt-healthchecker-rs")
-        .version("0.1.0")
+        .version("0.1.1")
         .author("Yusuke Sato <yusuke1.sato9.git@gmail.com>")
         .arg(
             Arg::new("host")
@@ -109,6 +109,8 @@ async fn main() {
         let create_opts = paho_mqtt::CreateOptionsBuilder::new()
             .server_uri(&uri)
             .client_id(client_id)
+            // ref. https://github.com/eclipse/paho.mqtt.rust/blob/v0.9.1/src/create_options.rs#L47-L68
+            .persistence(None)
             .finalize();
         let mut c = paho_mqtt::AsyncClient::new(create_opts).unwrap_or_else(|err| {
             panic!("Error creating the client: {:?}", err);

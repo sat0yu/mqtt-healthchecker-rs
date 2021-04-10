@@ -1,6 +1,6 @@
 [package]
 name = "mqtt-healthchecker-rs"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Yusuke Sato <yusuke1.sato9.git@gmail.com>"]
 edition = "2018"
 
