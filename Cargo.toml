@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "3.0.0-beta.2"
+clap = "3.2.6"
 paho-mqtt = "0.9.1"
 tokio = { version = "1.2.0", features = ["full"] }
 tokio-stream = "0.1.3"
