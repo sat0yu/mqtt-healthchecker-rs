@@ -48,20 +48,20 @@ async fn main() {
                 .short('h')
                 .long("host")
                 .value_name("HOST")
-                .about("Sets the MQTT broker host")
+                .help("Sets the MQTT broker host")
                 .required(true),
         )
         .arg(
             Arg::new("request_topic")
                 .long("request")
-                .about("Sets the topic name to which sends requests")
+                .help("Sets the topic name to which sends requests")
                 .value_name("REQUEST_TOPIC")
                 .required(true),
         )
         .arg(
             Arg::new("response_topic")
                 .long("response")
-                .about("Sets the topic name to which the response is sent")
+                .help("Sets the topic name to which the response is sent")
                 .value_name("RESPONSE_TOPIC")
                 .required(true),
         )
@@ -69,25 +69,25 @@ async fn main() {
             Arg::new("payload")
                 .short('p')
                 .long("payload")
-                .about("The payload for the healthckeck request (default: \"healthcheck\")"),
+                .help("The payload for the healthckeck request (default: \"healthcheck\")"),
         )
         .arg(
             Arg::new("expect")
                 .short('e')
                 .long("expect")
-                .about("The expected payload in the healthckeck response"),
+                .help("The expected payload in the healthckeck response"),
         )
         .arg(
             Arg::new("interval")
                 .short('i')
                 .long("interval")
-                .about("The interval period for sending a request (default: 2 seconds)"),
+                .help("The interval period for sending a request (default: 2 seconds)"),
         )
         .arg(
             Arg::new("timeout")
                 .short('t')
                 .long("timeout")
-                .about("The timeout (seconds) to exit with an error status (default: 16 seconds)"),
+                .help("The timeout (seconds) to exit with an error status (default: 16 seconds)"),
         )
         .get_matches()
         .into();
