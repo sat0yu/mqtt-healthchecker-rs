@@ -4,7 +4,9 @@ use clap::{App, Arg, ArgMatches};
 use std::{process, time};
 use tokio;
 use tokio_stream::StreamExt;
+use tracing::{debug, error, info, warn};
 
+#[derive(Debug)]
 struct Args {
     pub host: String,
     pub res_topic: String,
@@ -92,10 +94,20 @@ async fn main() {
         .get_matches()
         .into();
 
+    // install global collector configured based on RUST_LOG env var.
+    tracing_subscriber::fmt()
+        .with_line_number(true)
+        .with_file(true)
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .json()
+        .init();
+
+    debug!("{:?}", &args);
+
     let timeout = args.timeout;
     tokio::spawn(async move {
         tokio::time::sleep(time::Duration::from_secs(timeout.into())).await;
-        println!("has reached the timeout: {}", timeout);
+        error!("has reached the timeout: {}", timeout);
         process::exit(1);
     });
 
@@ -115,15 +127,15 @@ async fn main() {
         let mut c = paho_mqtt::AsyncClient::new(create_opts).unwrap_or_else(|err| {
             panic!("Error creating the client: {:?}", err);
         });
-        c.set_connected_callback(move |_| println!("MQTT Connection established: {}", uri));
+        c.set_connected_callback(move |_| info!("MQTT Connection established: {}", uri));
         c
     };
     let mut rx = client.get_stream(64);
     if let Err(e) = client.connect(None).await {
-        panic!("Unable to connect: {:?}", e)
+        panic!("Unable to connect (server_uri: {}): {:?}", args.host, e)
     }
     match client.subscribe(&args.res_topic, 0).await {
-        Ok(_) => println!("subscribed: {:?}", args.res_topic),
+        Ok(_) => info!("subscribed: {:?}", args.res_topic),
         Err(e) => {
             panic!("Error subscribes topics: {:?}", e);
         }
@@ -138,10 +150,10 @@ async fn main() {
             match client.publish(msg).await {
                 Ok(_) => {
                     counter += 1;
-                    println!("sent a request ({})", counter);
+                    info!("sent a request ({})", counter);
                 }
                 Err(e) => {
-                    println!("failed to send a request: {:?}", e);
+                    error!("failed to send a request: {:?}", e);
                 }
             }
             tokio::time::sleep(time::Duration::from_secs(interval.into())).await
@@ -152,23 +164,23 @@ async fn main() {
         let msg = match optional_message {
             Some(msg) => msg,
             None => {
-                println!("Stream disruption");
+                error!("Stream disruption");
                 continue;
             }
         };
         let topic = msg.topic().to_string();
         let payload = std::str::from_utf8(msg.payload()).unwrap().to_string();
-        println!("received: {} ({} bytes)", topic, payload.bytes().len());
+        debug!("received: {} ({} bytes)", topic, payload.bytes().len());
         if args.res_topic != topic {
             continue;
         }
         match args.expect {
             Some(ref msg) if *msg != payload => {
-                println!("Unexpected payload: {:?}", payload);
+                warn!("Unexpected payload: {:?}", payload);
                 continue;
             }
             _ => {
-                println!("sweet!");
+                info!("sweet!");
                 process::exit(0)
             }
         }
