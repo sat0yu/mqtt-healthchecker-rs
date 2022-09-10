@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt-healthchecker-rs"
-version = "0.1.1"
+version = "0.1.4"
 dependencies = [
  "clap",
  "paho-mqtt",
