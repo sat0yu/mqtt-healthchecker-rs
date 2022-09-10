@@ -50,6 +50,7 @@ async fn main() {
                 .short('h')
                 .long("host")
                 .value_name("HOST")
+                .env("MQTT_HEALTHCHECKER_HOST")
                 .help("Sets the MQTT broker host")
                 .required(true),
         )
@@ -58,6 +59,7 @@ async fn main() {
                 .long("request")
                 .help("Sets the topic name to which sends requests")
                 .value_name("REQUEST_TOPIC")
+                .env("MQTT_HEALTHCHECKER_REQUEST_TOPIC")
                 .required(true),
         )
         .arg(
@@ -65,6 +67,7 @@ async fn main() {
                 .long("response")
                 .help("Sets the topic name to which the response is sent")
                 .value_name("RESPONSE_TOPIC")
+                .env("MQTT_HEALTHCHECKER_RESPONSE_TOPIC")
                 .required(true),
         )
         .arg(
